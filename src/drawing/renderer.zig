@@ -114,6 +114,38 @@ pub fn drawText(image: *Image, pos: Point, text: []const u8, color: Color, size:
     cairo.pango_cairo_show_layout(cr, layout);
 }
 
+pub fn drawFreehand(image: *Image, points: []const Point, color: Color, width: u32) void {
+    if (points.len < 2) return;
+
+    const surface = cairo.cairo_image_surface_create_for_data(
+        image.data.ptr,
+        cairo.CAIRO_FORMAT_ARGB32,
+        @intCast(image.width),
+        @intCast(image.height),
+        @intCast(image.stride),
+    );
+    defer cairo.cairo_surface_destroy(surface);
+
+    const cr = cairo.cairo_create(surface);
+    defer cairo.cairo_destroy(cr);
+
+    const r = @as(f64, @floatFromInt(color.r)) / 255.0;
+    const g = @as(f64, @floatFromInt(color.g)) / 255.0;
+    const b = @as(f64, @floatFromInt(color.b)) / 255.0;
+    const a = @as(f64, @floatFromInt(color.a)) / 255.0;
+
+    cairo.cairo_set_source_rgba(cr, r, g, b, a);
+    cairo.cairo_set_line_width(cr, @floatFromInt(width));
+    cairo.cairo_set_line_cap(cr, cairo.CAIRO_LINE_CAP_ROUND);
+    cairo.cairo_set_line_join(cr, cairo.CAIRO_LINE_JOIN_ROUND);
+
+    cairo.cairo_move_to(cr, points[0].x, points[0].y);
+    for (points[1..]) |p| {
+        cairo.cairo_line_to(cr, p.x, p.y);
+    }
+    cairo.cairo_stroke(cr);
+}
+
 pub fn clearImage(image: *Image, color: Color) void {
     var y: u32 = 0;
     while (y < image.height) : (y += 1) {

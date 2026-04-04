@@ -29,8 +29,10 @@ pub const Canvas = struct {
 
     pub fn deinit(self: *Canvas) void {
         for (self.objects.items) |obj| {
-            if (obj == .text) {
-                self.allocator.free(obj.text.text);
+            switch (obj) {
+                .text => |t| self.allocator.free(t.text),
+                .freehand => |f| self.allocator.free(f.points),
+                else => {},
             }
         }
         self.objects.deinit();
@@ -77,10 +79,17 @@ pub const Canvas = struct {
         self.tool_state.start_pos = pos;
         self.tool_state.current_pos = pos;
         self.tool_state.is_drawing = true;
+        if (self.tool_state.current_tool == .draw) {
+            self.tool_state.freehand_points.clearRetainingCapacity();
+            self.tool_state.freehand_points.append(pos) catch {};
+        }
     }
 
     pub fn updateDraw(self: *Canvas, pos: Point) void {
         self.tool_state.current_pos = pos;
+        if (self.tool_state.current_tool == .draw and self.tool_state.is_drawing) {
+            self.tool_state.freehand_points.append(pos) catch {};
+        }
     }
 
     pub fn endDraw(self: *Canvas) !?DrawObject {
@@ -113,6 +122,16 @@ pub const Canvas = struct {
                 self.tool_state.text_pos = start;
                 self.tool_state.text_buffer.clearAndFree();
                 return null;
+            },
+            .draw => {
+                const pts = self.tool_state.freehand_points.items;
+                if (pts.len < 2) return null;
+                const owned = self.allocator.dupe(Point, pts) catch return null;
+                return DrawObject{ .freehand = .{
+                    .points = owned,
+                    .color = self.tool_state.color,
+                    .width = self.tool_state.line_width,
+                }};
             },
             else => null,
         };
@@ -187,6 +206,14 @@ pub const Canvas = struct {
                         const rect = Rect.fromPoints(start, self.tool_state.current_pos);
                         renderer.drawRect(&output, rect, self.tool_state.color, self.tool_state.line_width, false);
                     },
+                    .draw => {
+                        renderer.drawFreehand(
+                            &output,
+                            self.tool_state.freehand_points.items,
+                            self.tool_state.color,
+                            self.tool_state.line_width,
+                        );
+                    },
                     else => {},
                 }
             }
@@ -231,6 +258,9 @@ pub const Canvas = struct {
             },
             .text => |text| {
                 renderer.drawText(image, text.pos, text.text, text.color, text.size) catch {};
+            },
+            .freehand => |fh| {
+                renderer.drawFreehand(image, fh.points, fh.color, fh.width);
             },
         }
     }

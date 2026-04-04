@@ -77,6 +77,7 @@ pub const Tool = enum {
     line,
     rectangle,
     text,
+    draw,
 
     pub fn toString(self: Tool) []const u8 {
         return switch (self) {
@@ -85,6 +86,7 @@ pub const Tool = enum {
             .line => "Line",
             .rectangle => "Rectangle",
             .text => "Text",
+            .draw => "Draw",
         };
     }
 };
@@ -102,12 +104,17 @@ pub const ToolState = struct {
     text_buffer: std.ArrayList(u8) = undefined,
     text_pos: Point = .{ .x = 0, .y = 0 },
 
+    // Freehand draw state
+    freehand_points: std.ArrayList(Point) = undefined,
+
     pub fn initTextBuffer(self: *ToolState, allocator: std.mem.Allocator) void {
         self.text_buffer = std.ArrayList(u8).init(allocator);
+        self.freehand_points = std.ArrayList(Point).init(allocator);
     }
 
     pub fn deinitTextBuffer(self: *ToolState) void {
         self.text_buffer.deinit();
+        self.freehand_points.deinit();
     }
 };
 
@@ -115,6 +122,7 @@ pub const DrawObject = union(enum) {
     line: LineObject,
     rectangle: RectangleObject,
     text: TextObject,
+    freehand: FreehandObject,
 };
 
 pub const LineObject = struct {
@@ -136,6 +144,12 @@ pub const TextObject = struct {
     text: []const u8,
     color: Color,
     size: u32 = 16,
+};
+
+pub const FreehandObject = struct {
+    points: []Point,
+    color: Color,
+    width: u32,
 };
 
 pub const Image = struct {

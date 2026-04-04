@@ -97,7 +97,7 @@ pub fn createWindow(allocator: std.mem.Allocator, screenshot: Image) !*AppData {
     c.gtk_box_pack_start(@ptrCast(vbox), status_box, 0, 0, 5);
 
     const help_label = c.gtk_label_new(
-        \\ L=Line  R=Rect  T=Text  1-7=Colors  Esc=Quit/Cancel
+        \\ D=Draw  L=Line  R=Rect  T=Text  1-7=Colors  Esc=Quit/Cancel
     );
     c.gtk_box_pack_start(@ptrCast(status_box), help_label, 0, 0, 5);
 
@@ -352,6 +352,10 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
             doSaveAndClose(user_data, ctrl) catch |err| {
                 std.debug.print("[onKeyPress] doSaveAndClose error: {}\n", .{err});
             };
+        },
+        c.GDK_KEY_d, c.GDK_KEY_D => {
+            user_data.canvas.tool_state.current_tool = .draw;
+            updateStatus(user_data, "Draw tool - hold and drag freely | Esc=deselect");
         },
         c.GDK_KEY_l, c.GDK_KEY_L => {
             user_data.canvas.tool_state.current_tool = .line;
