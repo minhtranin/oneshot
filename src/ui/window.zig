@@ -212,6 +212,21 @@ fn onButtonPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) cal
         }
         c.gtk_widget_grab_focus(user_data.window);
     }
+
+    // Right-click: undo last object
+    if (btn.button == 3 and !user_data.canvas.selecting_area) {
+        if (user_data.canvas.objects.items.len > 0) {
+            const obj = user_data.canvas.objects.pop();
+            switch (obj) {
+                .text => |t| user_data.allocator.free(t.text),
+                .freehand => |f| user_data.allocator.free(f.points),
+                else => {},
+            }
+            updateStatus(user_data, "Undo");
+            c.gtk_widget_queue_draw(user_data.drawing_area);
+        }
+        c.gtk_widget_grab_focus(user_data.window);
+    }
     return 1;
 }
 

@@ -58,7 +58,7 @@ pub const Canvas = struct {
         const cropped = try Image.init(self.allocator, sw, sh);
         var y: u32 = 0;
         while (y < sh) : (y += 1) {
-            const src_row = (sy + y) * self.base_image.stride;
+            const src_row = (sy + y) * self.base_image.stride + sx * 4;
             const dst_row = y * cropped.stride;
             @memcpy(
                 cropped.data[dst_row .. dst_row + sw * 4],
