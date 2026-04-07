@@ -71,7 +71,7 @@ pub const Canvas = struct {
         self.base_image = cropped;
         self.selection = null;
         self.selecting_area = false;
-        self.tool_state.current_tool = .line;
+        self.tool_state.current_tool = .draw;
         return cropped;
     }
 
