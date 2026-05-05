@@ -101,20 +101,24 @@ pub const ToolState = struct {
 
     // Text input state
     is_typing: bool = false,
-    text_buffer: std.ArrayList(u8) = undefined,
+    text_buffer: std.ArrayList(u8) = .empty,
     text_pos: Point = .{ .x = 0, .y = 0 },
 
     // Freehand draw state
-    freehand_points: std.ArrayList(Point) = undefined,
+    freehand_points: std.ArrayList(Point) = .empty,
+
+    // Allocator stored for deinit
+    allocator: std.mem.Allocator = undefined,
 
     pub fn initTextBuffer(self: *ToolState, allocator: std.mem.Allocator) void {
-        self.text_buffer = std.ArrayList(u8).init(allocator);
-        self.freehand_points = std.ArrayList(Point).init(allocator);
+        self.allocator = allocator;
+        self.text_buffer = .empty;
+        self.freehand_points = .empty;
     }
 
     pub fn deinitTextBuffer(self: *ToolState) void {
-        self.text_buffer.deinit();
-        self.freehand_points.deinit();
+        self.text_buffer.deinit(self.allocator);
+        self.freehand_points.deinit(self.allocator);
     }
 };
 

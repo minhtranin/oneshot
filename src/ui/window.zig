@@ -131,7 +131,7 @@ pub fn createWindow(allocator: std.mem.Allocator, screenshot: Image) !*AppData {
     return app_data;
 }
 
-fn onDraw(_: [*c]c.GtkWidget, cr: *anyopaque, user_data: *AppData) callconv(.C) c.gboolean {
+fn onDraw(_: [*c]c.GtkWidget, cr: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
     if (user_data.canvas.selecting_area) {
         // Phase 1: blit raw screenshot directly (no copy), then draw overlay
         // with Cairo compositing — avoids the expensive per-pixel darkening loop.
@@ -191,7 +191,7 @@ fn onDraw(_: [*c]c.GtkWidget, cr: *anyopaque, user_data: *AppData) callconv(.C) 
     return 1;
 }
 
-fn onButtonPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.C) c.gboolean {
+fn onButtonPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
     const btn: *const GdkEventButton = @alignCast(@ptrCast(event));
     const pos = Point{ .x = @floatCast(btn.x), .y = @floatCast(btn.y) };
 
@@ -216,7 +216,7 @@ fn onButtonPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) cal
     // Right-click: undo last object
     if (btn.button == 3 and !user_data.canvas.selecting_area) {
         if (user_data.canvas.objects.items.len > 0) {
-            const obj = user_data.canvas.objects.pop();
+            const obj = user_data.canvas.objects.pop().?;
             switch (obj) {
                 .text => |t| user_data.allocator.free(t.text),
                 .freehand => |f| user_data.allocator.free(f.points),
@@ -230,7 +230,7 @@ fn onButtonPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) cal
     return 1;
 }
 
-fn onButtonRelease(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.C) c.gboolean {
+fn onButtonRelease(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
     const btn: *const GdkEventButton = @alignCast(@ptrCast(event));
     const pos = Point{ .x = @floatCast(btn.x), .y = @floatCast(btn.y) };
 
@@ -265,7 +265,7 @@ fn onButtonRelease(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) c
     return 1;
 }
 
-fn onMotionNotify(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.C) c.gboolean {
+fn onMotionNotify(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
     const motion: *const GdkEventMotion = @alignCast(@ptrCast(event));
     const pos = Point{ .x = @floatCast(motion.x), .y = @floatCast(motion.y) };
 
@@ -283,7 +283,7 @@ fn onMotionNotify(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) ca
     return 1;
 }
 
-fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.C) c.gboolean {
+fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
     const key_event: *const GdkEventKey = @alignCast(@ptrCast(event));
     const keyval = key_event.keyval;
     const state = key_event.state;
@@ -327,7 +327,7 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
             c.GDK_KEY_Escape => {
                 // Cancel text, go back to tool (don't quit)
                 user_data.canvas.tool_state.is_typing = false;
-                user_data.canvas.tool_state.text_buffer.clearAndFree();
+                user_data.canvas.tool_state.text_buffer.clearAndFree(user_data.allocator);
                 updateStatus(user_data, "Text cancelled - Esc again to quit");
                 c.gtk_widget_queue_draw(user_data.drawing_area);
                 return 1;
@@ -396,7 +396,7 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
     return 1;
 }
 
-fn onDestroy(_: [*c]c.GtkWidget, user_data: *AppData) callconv(.C) void {
+fn onDestroy(_: [*c]c.GtkWidget, user_data: *AppData) callconv(.c) void {
     user_data.canvas.deinit();
     c.gtk_main_quit();
 }

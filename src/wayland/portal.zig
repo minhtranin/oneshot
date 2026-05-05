@@ -140,9 +140,11 @@ fn captureViaGrim(allocator: std.mem.Allocator) !Image {
     const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_grim_{d}.png", .{std.time.milliTimestamp()});
     defer allocator.free(temp_file);
 
+    // Use "-s 1" to capture at logical (1:1) resolution so the image matches
+    // GTK's logical coordinate system regardless of HiDPI/fractional scaling.
     const result = try std.process.Child.run(.{
         .allocator = allocator,
-        .argv = &.{ "grim", temp_file },
+        .argv = &.{ "grim", "-s", "1", temp_file },
     });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);

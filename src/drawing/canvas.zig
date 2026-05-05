@@ -21,7 +21,7 @@ pub const Canvas = struct {
         var c = Canvas{
             .allocator = allocator,
             .base_image = base_image,
-            .objects = std.ArrayList(DrawObject).init(allocator),
+            .objects = std.ArrayList(DrawObject){},
         };
         c.tool_state.initTextBuffer(allocator);
         return c;
@@ -35,13 +35,13 @@ pub const Canvas = struct {
                 else => {},
             }
         }
-        self.objects.deinit();
+        self.objects.deinit(self.allocator);
         self.tool_state.deinitTextBuffer();
         self.base_image.deinit();
     }
 
     pub fn addObject(self: *Canvas, obj: DrawObject) !void {
-        try self.objects.append(obj);
+        try self.objects.append(self.allocator, obj);
     }
 
     /// Crop the base image to the current selection and switch to editor mode.
@@ -81,14 +81,14 @@ pub const Canvas = struct {
         self.tool_state.is_drawing = true;
         if (self.tool_state.current_tool == .draw) {
             self.tool_state.freehand_points.clearRetainingCapacity();
-            self.tool_state.freehand_points.append(pos) catch {};
+            self.tool_state.freehand_points.append(self.allocator, pos) catch {};
         }
     }
 
     pub fn updateDraw(self: *Canvas, pos: Point) void {
         self.tool_state.current_pos = pos;
         if (self.tool_state.current_tool == .draw and self.tool_state.is_drawing) {
-            self.tool_state.freehand_points.append(pos) catch {};
+            self.tool_state.freehand_points.append(self.allocator, pos) catch {};
         }
     }
 
@@ -120,7 +120,7 @@ pub const Canvas = struct {
             .text => {
                 self.tool_state.is_typing = true;
                 self.tool_state.text_pos = start;
-                self.tool_state.text_buffer.clearAndFree();
+        self.tool_state.text_buffer.clearAndFree(self.allocator);
                 return null;
             },
             .draw => {
@@ -139,7 +139,7 @@ pub const Canvas = struct {
 
     pub fn typeChar(self: *Canvas, ch: u8) !void {
         if (!self.tool_state.is_typing) return;
-        try self.tool_state.text_buffer.append(ch);
+        try self.tool_state.text_buffer.append(self.allocator, ch);
     }
 
     pub fn backspace(self: *Canvas) void {
@@ -156,7 +156,7 @@ pub const Canvas = struct {
         if (self.tool_state.text_buffer.items.len == 0) return null;
 
         const text = try self.allocator.dupe(u8, self.tool_state.text_buffer.items);
-        self.tool_state.text_buffer.clearAndFree();
+        self.tool_state.text_buffer.clearAndFree(self.allocator);
 
         return DrawObject{
             .text = .{
