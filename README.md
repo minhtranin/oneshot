@@ -21,15 +21,14 @@ cp zig-out/bin/oneshot ~/.local/bin/
 ```
 
 
-|-----|--------|
-| Drag | Select region |
-| `Enter` | Copy to clipboard |
-| `Ctrl+Enter` | Save to `~/Pictures` |
-| `D` | Freehand draw |
-| `L` | Line |
-| `R` | Rectangle |
-| `T` | Text (click to place, type, Enter to confirm) |
-| `1`–`7` | Colors: Red, Green, Blue, Yellow, Magenta, White, Black |
-| Right-click | Undo last annotation |
-| `Esc` | Cancel / Quit |
+- Drag — Select region
+- Enter — Copy to clipboard
+- Ctrl+Enter — Save to ~/Pictures
+- D — Freehand draw
+- L — Line
+- R — Rectangle
+- T — Text (click to place, type, Enter to confirm)
+- 1–7 — Colors: Red, Green, Blue, Yellow, Magenta, White, Black
+- Right-click — Undo last annotation
+- Esc — Cancel / Quit
 
