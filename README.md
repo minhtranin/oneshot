@@ -1,6 +1,4 @@
-# Oneshot
 
-A lightweight Wayland screenshot annotation tool written in Zig. Select a region, annotate, then copy to clipboard or save to `~/Pictures`.
 
 ## Requirements
 
@@ -24,7 +22,7 @@ cp zig-out/bin/oneshot ~/.local/bin/
 
 ## Usage
 
-Run `oneshot` or bind it to a keyboard shortcut.
+
 
 | Key | Action |
 |-----|--------|
