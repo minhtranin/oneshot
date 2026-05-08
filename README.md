@@ -8,7 +8,7 @@
 ```bash
 sudo apt install libgtk-3-dev libcairo2-dev libpango1.0-dev grim wl-clipboard
 
-# for arch: sudo pacman -S zig gtk3 cairo pango grim wl-clipboard
+for arch: sudo pacman -S zig gtk3 cairo pango grim wl-clipboard
 ```
 
 ## Build & Install
@@ -20,11 +20,7 @@ zig build -Doptimize=ReleaseFast
 cp zig-out/bin/oneshot ~/.local/bin/
 ```
 
-## Usage
 
-
-
-| Key | Action |
 |-----|--------|
 | Drag | Select region |
 | `Enter` | Copy to clipboard |
