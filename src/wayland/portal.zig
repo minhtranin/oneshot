@@ -12,6 +12,12 @@ pub const PortalError = error{
     Timeout,
 };
 
+fn nowMillis() i64 {
+    var ts: std.os.linux.timespec = undefined;
+    _ = std.os.linux.clock_gettime(.REALTIME, &ts);
+    return @as(i64, @intCast(ts.sec)) * 1000 + @divFloor(@as(i64, @intCast(ts.nsec)), 1_000_000);
+}
+
 /// Capture screen using FreeDesktop Portal (works on GNOME Wayland).
 /// Falls back to grim / gnome-screenshot if portal is unavailable.
 pub fn captureScreen(allocator: std.mem.Allocator) !Image {
@@ -42,12 +48,12 @@ pub fn captureScreen(allocator: std.mem.Allocator) !Image {
 }
 
 fn captureViaPortal(allocator: std.mem.Allocator) !Image {
-    const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_portal_{d}.png", .{std.time.milliTimestamp()});
+    const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_portal_{d}.png", .{nowMillis()});
     defer allocator.free(temp_file);
 
     // Write a small Python helper script to call the portal.
     // This is the most reliable method on GNOME Wayland.
-    const script_path = try std.fmt.allocPrint(allocator, "/tmp/oneshot_portal_{d}.py", .{std.time.milliTimestamp()});
+    const script_path = try std.fmt.allocPrint(allocator, "/tmp/oneshot_portal_{d}.py", .{nowMillis()});
     defer allocator.free(script_path);
 
     const script_content =
@@ -137,7 +143,7 @@ fn captureViaPortal(allocator: std.mem.Allocator) !Image {
 }
 
 fn captureViaGrim(allocator: std.mem.Allocator) !Image {
-    const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_grim_{d}.png", .{std.time.milliTimestamp()});
+    const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_grim_{d}.png", .{nowMillis()});
     defer allocator.free(temp_file);
 
     // Use "-s 1" to capture at logical (1:1) resolution so the image matches
@@ -157,7 +163,7 @@ fn captureViaGrim(allocator: std.mem.Allocator) !Image {
 }
 
 fn captureViaGnomeScreenshot(allocator: std.mem.Allocator) !Image {
-    const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_gnome_{d}.png", .{std.time.milliTimestamp()});
+    const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_gnome_{d}.png", .{nowMillis()});
     defer allocator.free(temp_file);
 
     const result = try std.process.Child.run(.{

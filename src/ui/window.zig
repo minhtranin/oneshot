@@ -428,7 +428,9 @@ fn doSaveAndClose(app_data: *AppData, to_file: bool) !void {
         const documents_dir = try std.fs.path.resolve(app_data.allocator, &.{home, "Pictures"});
         defer app_data.allocator.free(documents_dir);
 
-        const filename = try std.fmt.allocPrint(app_data.allocator, "screenshot_{d}.png", .{std.time.timestamp()});
+        var ts: std.os.linux.timespec = undefined;
+        _ = std.os.linux.clock_gettime(.REALTIME, &ts);
+        const filename = try std.fmt.allocPrint(app_data.allocator, "screenshot_{d}.png", .{@as(i64, @intCast(ts.sec))});
         defer app_data.allocator.free(filename);
 
         const filepath = try std.fs.path.join(app_data.allocator, &.{ documents_dir, filename });

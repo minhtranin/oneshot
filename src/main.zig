@@ -7,7 +7,7 @@ const portal = @import("wayland/portal.zig");
 const window = @import("ui/window.zig");
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer {
         const leaked = gpa.deinit();
         if (leaked == .leak) {

@@ -301,9 +301,10 @@ pub const Canvas = struct {
     pub fn toPNG(self: *const Canvas, allocator: std.mem.Allocator) ![]u8 {
         std.debug.print("[toPNG] starting (base_image {d}x{d}, {d} objects)\n", .{ self.base_image.width, self.base_image.height, self.objects.items.len });
 
-        const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_save_{d}.png", .{
-            std.time.milliTimestamp(),
-        });
+        var ts: std.os.linux.timespec = undefined;
+        _ = std.os.linux.clock_gettime(.REALTIME, &ts);
+        const ms: i64 = @as(i64, @intCast(ts.sec)) * 1000 + @divFloor(@as(i64, @intCast(ts.nsec)), 1_000_000);
+        const temp_file = try std.fmt.allocPrint(allocator, "/tmp/oneshot_save_{d}.png", .{ms});
         defer allocator.free(temp_file);
 
         try self.saveToFile(temp_file);
