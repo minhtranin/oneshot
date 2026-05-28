@@ -1,0 +1,67 @@
+name: Build + release binary
+
+on:
+  push:
+    branches: [master, main]
+    tags: ['v*']
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build oneshot (Ubuntu 22.04, glibc 2.35)
+    # 22.04 has glibc 2.35, covers Ubuntu 22.04+, Debian 12+, Fedora 37+,
+    # Arch (rolling), recent openSUSE. Older distros: build from source.
+    runs-on: ubuntu-22.04
+    env:
+      ZIG_VERSION: 0.15.1
+      BIN_NAME: oneshot-x86_64-linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config curl ca-certificates xz-utils \
+            libgtk-3-dev libcairo2-dev libpango1.0-dev
+
+      - name: Install Zig ${{ env.ZIG_VERSION }}
+        run: |
+          curl -L -o zig.tar.xz \
+            "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
+          mkdir -p "$HOME/zig"
+          tar xJf zig.tar.xz -C "$HOME/zig" --strip-components=1
+          echo "$HOME/zig" >> "$GITHUB_PATH"
+          "$HOME/zig/zig" version
+
+      - name: Build (ReleaseFast)
+        run: zig build -Doptimize=ReleaseFast
+
+      - name: Stage release asset
+        id: stage
+        run: |
+          cp zig-out/bin/oneshot "$BIN_NAME"
+          chmod +x "$BIN_NAME"
+          file "$BIN_NAME"
+          ls -lh "$BIN_NAME"
+          echo "path=$BIN_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact (every build)
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneshot-binary
+          path: ${{ steps.stage.outputs.path }}
+          if-no-files-found: error
+
+      - name: Attach binary to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.stage.outputs.path }}
+          generate_release_notes: true
