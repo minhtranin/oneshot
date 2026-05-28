@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
 
     // Link GTK 3 and dependencies
     exe_mod.linkSystemLibrary("gtk-3", .{});
+    exe_mod.linkSystemLibrary("gdk-3", .{});
     exe_mod.linkSystemLibrary("cairo", .{});
     exe_mod.linkSystemLibrary("pangocairo", .{});
     exe_mod.link_libc = true;

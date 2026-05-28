@@ -65,6 +65,9 @@ pub const AppData = struct {
     status_label: [*c]c.GtkWidget,
     start_pos: ?Point = null,
     is_dragging: bool = false,
+    /// HiDPI factor: image pixels per logical (widget/event) pixel.
+    /// Mouse coords are logical; base_image is physical. Multiply to map up.
+    display_scale: f64 = 1.0,
 
     colors: [7]Color = .{
         Color.rgb(255, 0, 0),
@@ -86,12 +89,37 @@ pub fn createWindow(allocator: std.mem.Allocator, screenshot: Image) !*AppData {
     c.gtk_window_set_title(@ptrCast(window), "Oneshot - Select Area");
     c.gtk_window_fullscreen(@ptrCast(window));
 
+    // Detect HiDPI scale: image is physical px; widget+events are logical px.
+    // Derive: scale = image_w / monitor_logical_w.
+    // Note: gdk_display_get_primary_monitor returns NULL on most Wayland sessions
+    // (no concept of primary). Fall back to monitor 0.
+    const display = c.gdk_display_get_default();
+    var display_scale: f64 = 1.0;
+    if (display != null) {
+        var monitor = c.gdk_display_get_primary_monitor(display);
+        if (monitor == null) {
+            const n = c.gdk_display_get_n_monitors(display);
+            if (n > 0) monitor = c.gdk_display_get_monitor(display, 0);
+        }
+        if (monitor != null) {
+            var geom: c.GdkRectangle = undefined;
+            c.gdk_monitor_get_geometry(monitor, &geom);
+            const logical_w: f64 = @floatFromInt(geom.width);
+            const physical_w: f64 = @floatFromInt(screenshot.width);
+            if (logical_w > 0) display_scale = physical_w / logical_w;
+            if (display_scale < 1.0) display_scale = 1.0;
+            if (display_scale > 4.0) display_scale = 4.0;
+        }
+    }
+
     const vbox = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0);
     c.gtk_container_add(@ptrCast(window), vbox);
 
     const drawing_area = c.gtk_drawing_area_new();
     c.gtk_box_pack_start(@ptrCast(vbox), drawing_area, 1, 1, 0);
-    c.gtk_widget_set_size_request(drawing_area, @intCast(screenshot.width), @intCast(screenshot.height));
+    const widget_w: c_int = @intFromFloat(@as(f64, @floatFromInt(screenshot.width)) / display_scale);
+    const widget_h: c_int = @intFromFloat(@as(f64, @floatFromInt(screenshot.height)) / display_scale);
+    c.gtk_widget_set_size_request(drawing_area, widget_w, widget_h);
 
     const status_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 10);
     c.gtk_box_pack_start(@ptrCast(vbox), status_box, 0, 0, 5);
@@ -111,6 +139,7 @@ pub fn createWindow(allocator: std.mem.Allocator, screenshot: Image) !*AppData {
         .canvas = canvas_mod.Canvas.init(allocator, screenshot),
         .drawing_area = drawing_area,
         .status_label = status_label,
+        .display_scale = display_scale,
     };
 
     // Connect signals
@@ -132,6 +161,7 @@ pub fn createWindow(allocator: std.mem.Allocator, screenshot: Image) !*AppData {
 }
 
 fn onDraw(_: [*c]c.GtkWidget, cr: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
+    const scale = user_data.display_scale;
     if (user_data.canvas.selecting_area) {
         // Phase 1: blit raw screenshot directly (no copy), then draw overlay
         // with Cairo compositing — avoids the expensive per-pixel darkening loop.
@@ -144,12 +174,16 @@ fn onDraw(_: [*c]c.GtkWidget, cr: *anyopaque, user_data: *AppData) callconv(.c) 
             @intCast(img.stride),
         );
         defer c.cairo_surface_destroy(surface);
+        // image is physical px; tell cairo to map device→user 1 logical = scale physical
+        c.cairo_surface_set_device_scale(surface, scale, scale);
         c.cairo_set_source_surface(@ptrCast(cr), surface, 0, 0);
         c.cairo_paint(@ptrCast(cr));
 
         if (user_data.canvas.selection) |sel| {
-            const iw: f64 = @floatFromInt(img.width);
-            const ih: f64 = @floatFromInt(img.height);
+            // Overlay drawn in LOGICAL user-space coords. Selection rect already
+            // stored in logical px (from mouse events).
+            const iw: f64 = @as(f64, @floatFromInt(img.width)) / scale;
+            const ih: f64 = @as(f64, @floatFromInt(img.height)) / scale;
             const sx: f64 = @floatCast(sel.x);
             const sy: f64 = @floatCast(sel.y);
             const sw: f64 = @floatCast(sel.width);
@@ -185,6 +219,7 @@ fn onDraw(_: [*c]c.GtkWidget, cr: *anyopaque, user_data: *AppData) callconv(.c) 
         @intCast(rendered.stride),
     );
     defer c.cairo_surface_destroy(surface);
+    c.cairo_surface_set_device_scale(surface, scale, scale);
 
     c.cairo_set_source_surface(@ptrCast(cr), surface, 0, 0);
     c.cairo_paint(@ptrCast(cr));
@@ -194,21 +229,21 @@ fn onDraw(_: [*c]c.GtkWidget, cr: *anyopaque, user_data: *AppData) callconv(.c) 
 fn onButtonPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
     const btn: *const GdkEventButton = @alignCast(@ptrCast(event));
     const pos = Point{ .x = @floatCast(btn.x), .y = @floatCast(btn.y) };
+    const editor_pos = scaledPos(pos, user_data.display_scale);
 
     if (btn.button == 1) {
         if (user_data.canvas.selecting_area) {
-            // Phase 1: area selection drag
+            // Phase 1: area selection drag (logical px)
             user_data.start_pos = pos;
             user_data.is_dragging = true;
         } else {
-            // Phase 2: drawing tools
+            // Phase 2: drawing tools (coords must be in image/physical px)
             if (user_data.canvas.tool_state.is_typing) {
-                // Commit any in-progress text first
                 if (user_data.canvas.commitText() catch null) |obj| {
                     user_data.canvas.addObject(obj) catch {};
                 }
             }
-            user_data.canvas.startDraw(pos);
+            user_data.canvas.startDraw(editor_pos);
         }
         c.gtk_widget_grab_focus(user_data.window);
     }
@@ -265,9 +300,15 @@ fn onButtonRelease(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) c
     return 1;
 }
 
+fn scaledPos(p: Point, scale: f64) Point {
+    const s: f32 = @floatCast(scale);
+    return .{ .x = p.x * s, .y = p.y * s };
+}
+
 fn onMotionNotify(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callconv(.c) c.gboolean {
     const motion: *const GdkEventMotion = @alignCast(@ptrCast(event));
     const pos = Point{ .x = @floatCast(motion.x), .y = @floatCast(motion.y) };
+    const editor_pos = scaledPos(pos, user_data.display_scale);
 
     if (user_data.canvas.selecting_area and user_data.is_dragging) {
         // Phase 1: update selection preview
@@ -276,8 +317,8 @@ fn onMotionNotify(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) ca
         }
         c.gtk_widget_queue_draw(user_data.drawing_area);
     } else if (!user_data.canvas.selecting_area) {
-        // Phase 2: update drawing preview
-        user_data.canvas.updateDraw(pos);
+        // Phase 2: update drawing preview (image-space coords)
+        user_data.canvas.updateDraw(editor_pos);
         c.gtk_widget_queue_draw(user_data.drawing_area);
     }
     return 1;
@@ -295,7 +336,7 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
             c.GDK_KEY_Return, c.GDK_KEY_KP_Enter => {
                 if (user_data.canvas.selection != null) {
                     // Crop to selection and enter editor mode
-                    _ = user_data.canvas.cropToSelection() catch {
+                    _ = user_data.canvas.cropToSelection(@floatCast(user_data.display_scale)) catch {
                         updateStatus(user_data, "Crop failed - try again");
                         return 1;
                     };

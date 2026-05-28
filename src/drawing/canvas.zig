@@ -45,13 +45,14 @@ pub const Canvas = struct {
     }
 
     /// Crop the base image to the current selection and switch to editor mode.
+    /// `scale` maps logical (selection) → physical (base_image) px.
     /// Returns the old base image so caller can deinit it.
-    pub fn cropToSelection(self: *Canvas) !Image {
+    pub fn cropToSelection(self: *Canvas, scale: f32) !Image {
         const sel = self.selection orelse return error.NoSelection;
-        const sx: u32 = @intFromFloat(@max(sel.x, 0));
-        const sy: u32 = @intFromFloat(@max(sel.y, 0));
-        const sw: u32 = @intFromFloat(@min(sel.width, @as(f32, @floatFromInt(self.base_image.width)) - @as(f32, @floatFromInt(sx))));
-        const sh: u32 = @intFromFloat(@min(sel.height, @as(f32, @floatFromInt(self.base_image.height)) - @as(f32, @floatFromInt(sy))));
+        const sx: u32 = @intFromFloat(@max(sel.x * scale, 0));
+        const sy: u32 = @intFromFloat(@max(sel.y * scale, 0));
+        const sw: u32 = @intFromFloat(@min(sel.width * scale, @as(f32, @floatFromInt(self.base_image.width)) - @as(f32, @floatFromInt(sx))));
+        const sh: u32 = @intFromFloat(@min(sel.height * scale, @as(f32, @floatFromInt(self.base_image.height)) - @as(f32, @floatFromInt(sy))));
 
         if (sw == 0 or sh == 0) return error.InvalidSelection;
 
