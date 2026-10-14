@@ -7,8 +7,8 @@
 #   bash install.sh --version                # print installed version
 #   bash install.sh --uninstall              # remove
 #
-# Installs ~/.local/bin/oneshot. No sudo. Runtime deps: GTK3, grim or
-# gnome-screenshot, wl-clipboard, cairo, pango (provided by the distro).
+# Installs ~/.local/bin/oneshot. No sudo. Runtime deps: GTK3, cairo, pango,
+# libpipewire, wl-clipboard; grim on wlroots compositors (provided by the distro).
 set -euo pipefail
 
 REPO="minhtranin/oneshot"
@@ -138,13 +138,21 @@ esac
 
 # Runtime sanity hints (non-fatal).
 miss=()
-for cmd in grim wl-copy; do
+helpers=(wl-copy)
+# GNOME captures via the portal; grim is only needed on wlroots compositors.
+[[ "${XDG_CURRENT_DESKTOP:-}" == *GNOME* ]] || helpers+=(grim)
+for cmd in "${helpers[@]}"; do
     command -v "$cmd" >/dev/null 2>&1 || miss+=("$cmd")
 done
 if (( ${#miss[@]} > 0 )); then
     warn "missing helper(s): ${miss[*]} — install for full functionality"
-    echo "    Arch:   sudo pacman -S grim wl-clipboard"
-    echo "    Ubuntu: sudo apt install grim wl-clipboard"
+    echo "    Arch:   sudo pacman -S wl-clipboard grim"
+    echo "    Ubuntu: sudo apt install wl-clipboard"
+fi
+if ! ldconfig -p 2>/dev/null | grep -q libpipewire-0.3.so.0; then
+    warn "libpipewire-0.3 not found — oneshot will not start without it"
+    echo "    Arch:   sudo pacman -S libpipewire"
+    echo "    Ubuntu: sudo apt install libpipewire-0.3-0"
 fi
 
 print_keybind_tips

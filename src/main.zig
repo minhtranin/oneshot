@@ -19,8 +19,13 @@ pub fn main() !void {
     std.debug.print("Oneshot Screenshot Tool\n", .{});
     std.debug.print("Capturing screen...\n", .{});
 
-    // Capture screen
-    const screenshot = portal.captureScreen(allocator) catch |err| {
+    // Capture on a worker thread while GTK initializes on the main thread.
+    var capture = CaptureJob{ .allocator = allocator };
+    const capture_thread = try std.Thread.spawn(.{}, CaptureJob.run, .{&capture});
+    _ = c.gtk_init_check(null, null);
+    capture_thread.join();
+
+    const screenshot = capture.result catch |err| {
         std.debug.print("Failed to capture screen: {}\n", .{err});
         std.debug.print("Make sure you have 'grim' or 'gnome-screenshot' installed\n", .{});
         std.debug.print("\nInstall with: sudo apt install grim wl-clipboard\n", .{});
@@ -40,9 +45,9 @@ pub fn main() !void {
     std.debug.print("  R       - Rectangle tool\n", .{});
     std.debug.print("  T       - Text tool\n", .{});
     std.debug.print("  1-7     - Colors (Red, Green, Blue, Yellow, Magenta, White, Black)\n", .{});
-    std.debug.print("  Drag    - Select area\n", .{});
-    std.debug.print("  Enter   - Save to clipboard\n", .{});
-    std.debug.print("  Ctrl+Enter - Save to ~/Documents\n", .{});
+    std.debug.print("  Drag    - Select area, Space to confirm\n", .{});
+    std.debug.print("  Space   - Save to clipboard\n", .{});
+    std.debug.print("  Ctrl+Space - Save to ~/Pictures\n", .{});
     std.debug.print("  Esc     - Quit\n\n", .{});
 
     // Run GTK main loop
@@ -50,3 +55,12 @@ pub fn main() !void {
 
     allocator.destroy(app_data);
 }
+
+const CaptureJob = struct {
+    allocator: std.mem.Allocator,
+    result: anyerror!@import("types.zig").Image = error.NotStarted,
+
+    fn run(self: *CaptureJob) void {
+        self.result = portal.captureScreen(self.allocator);
+    }
+};

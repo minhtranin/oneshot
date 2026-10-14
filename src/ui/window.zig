@@ -62,7 +62,6 @@ pub const AppData = struct {
     window: [*c]c.GtkWidget,
     canvas: canvas_mod.Canvas,
     drawing_area: [*c]c.GtkWidget,
-    status_label: [*c]c.GtkWidget,
     start_pos: ?Point = null,
     is_dragging: bool = false,
     /// HiDPI factor: image pixels per logical (widget/event) pixel.
@@ -121,24 +120,12 @@ pub fn createWindow(allocator: std.mem.Allocator, screenshot: Image) !*AppData {
     const widget_h: c_int = @intFromFloat(@as(f64, @floatFromInt(screenshot.height)) / display_scale);
     c.gtk_widget_set_size_request(drawing_area, widget_w, widget_h);
 
-    const status_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 10);
-    c.gtk_box_pack_start(@ptrCast(vbox), status_box, 0, 0, 5);
-
-    const help_label = c.gtk_label_new(
-        \\ D=Draw  L=Line  R=Rect  T=Text  1-7=Colors  Esc=Quit/Cancel
-    );
-    c.gtk_box_pack_start(@ptrCast(status_box), help_label, 0, 0, 5);
-
-    const status_label = c.gtk_label_new("Drag to select area, then press Enter");
-    c.gtk_box_pack_end(@ptrCast(status_box), status_label, 0, 0, 5);
-
     const app_data = try allocator.create(AppData);
     app_data.* = .{
         .allocator = allocator,
         .window = window,
         .canvas = canvas_mod.Canvas.init(allocator, screenshot),
         .drawing_area = drawing_area,
-        .status_label = status_label,
         .display_scale = display_scale,
     };
 
@@ -257,7 +244,6 @@ fn onButtonPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) cal
                 .freehand => |f| user_data.allocator.free(f.points),
                 else => {},
             }
-            updateStatus(user_data, "Undo");
             c.gtk_widget_queue_draw(user_data.drawing_area);
         }
         c.gtk_widget_grab_focus(user_data.window);
@@ -277,7 +263,6 @@ fn onButtonRelease(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) c
                     const r = Rect.fromPoints(start, pos);
                     if (r.width > 5 and r.height > 5) {
                         user_data.canvas.setSelection(r);
-                        updateStatus(user_data, "Enter = confirm selection | Esc = quit");
                     } else {
                         user_data.canvas.clearSelection();
                     }
@@ -290,9 +275,6 @@ fn onButtonRelease(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) c
             const obj = user_data.canvas.endDraw() catch null;
             if (obj) |o| {
                 user_data.canvas.addObject(o) catch {};
-            }
-            if (user_data.canvas.tool_state.is_typing) {
-                updateStatus(user_data, "Type text, Enter=done, Esc=cancel text");
             }
         }
         c.gtk_widget_queue_draw(user_data.drawing_area);
@@ -333,16 +315,14 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
     // ── Phase 1: Area Selection ──
     if (user_data.canvas.selecting_area) {
         switch (keyval) {
-            c.GDK_KEY_Return, c.GDK_KEY_KP_Enter => {
+            c.GDK_KEY_space => {
                 if (user_data.canvas.selection != null) {
                     // Crop to selection and enter editor mode
                     _ = user_data.canvas.cropToSelection(@floatCast(user_data.display_scale)) catch {
-                        updateStatus(user_data, "Crop failed - try again");
                         return 1;
                     };
                     c.gtk_window_set_title(@ptrCast(user_data.window), "Oneshot - Editor");
                     c.gtk_window_unfullscreen(@ptrCast(user_data.window));
-                    updateStatus(user_data, "L=line R=rect T=text 1-7=colors Enter=save Esc=quit");
                     c.gtk_widget_queue_draw(user_data.drawing_area);
                 }
             },
@@ -361,7 +341,6 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
                 if (user_data.canvas.commitText() catch null) |obj| {
                     user_data.canvas.addObject(obj) catch {};
                 }
-                updateStatus(user_data, "Text placed");
                 c.gtk_widget_queue_draw(user_data.drawing_area);
                 return 1;
             },
@@ -369,7 +348,6 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
                 // Cancel text, go back to tool (don't quit)
                 user_data.canvas.tool_state.is_typing = false;
                 user_data.canvas.tool_state.text_buffer.clearAndFree(user_data.allocator);
-                updateStatus(user_data, "Text cancelled - Esc again to quit");
                 c.gtk_widget_queue_draw(user_data.drawing_area);
                 return 1;
             },
@@ -399,37 +377,31 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
             // If a tool is selected, deselect it. If no tool, quit.
             if (user_data.canvas.tool_state.current_tool != .none) {
                 user_data.canvas.tool_state.current_tool = .none;
-                updateStatus(user_data, "Tool deselected. L/R/T to pick, Esc=quit");
             } else {
                 c.gtk_window_close(@ptrCast(user_data.window));
             }
         },
-        c.GDK_KEY_Return, c.GDK_KEY_KP_Enter => {
+        c.GDK_KEY_space => {
             doSaveAndClose(user_data, ctrl) catch |err| {
                 std.debug.print("[onKeyPress] doSaveAndClose error: {}\n", .{err});
             };
         },
         c.GDK_KEY_d, c.GDK_KEY_D => {
             user_data.canvas.tool_state.current_tool = .draw;
-            updateStatus(user_data, "Draw tool - hold and drag freely | Esc=deselect");
         },
         c.GDK_KEY_l, c.GDK_KEY_L => {
             user_data.canvas.tool_state.current_tool = .line;
-            updateStatus(user_data, "Line tool - drag to draw | Esc=deselect");
         },
         c.GDK_KEY_r, c.GDK_KEY_R => {
             user_data.canvas.tool_state.current_tool = .rectangle;
-            updateStatus(user_data, "Rectangle tool - drag to draw | Esc=deselect");
         },
         c.GDK_KEY_t, c.GDK_KEY_T => {
             user_data.canvas.tool_state.current_tool = .text;
-            updateStatus(user_data, "Text tool - click to place, then type | Esc=cancel");
         },
         c.GDK_KEY_1...c.GDK_KEY_7 => {
             const idx: usize = @intCast(keyval - c.GDK_KEY_1);
             if (idx < user_data.colors.len) {
                 user_data.canvas.tool_state.color = user_data.colors[idx];
-                updateStatus(user_data, "Color changed");
             }
         },
         else => {},
@@ -440,12 +412,6 @@ fn onKeyPress(_: [*c]c.GtkWidget, event: *anyopaque, user_data: *AppData) callco
 fn onDestroy(_: [*c]c.GtkWidget, user_data: *AppData) callconv(.c) void {
     user_data.canvas.deinit();
     c.gtk_main_quit();
-}
-
-fn updateStatus(app_data: *AppData, msg: []const u8) void {
-    const msg_z = std.heap.c_allocator.dupeZ(u8, msg) catch return;
-    defer std.heap.c_allocator.free(msg_z);
-    c.gtk_label_set_text(@ptrCast(app_data.status_label), msg_z.ptr);
 }
 
 fn doSaveAndClose(app_data: *AppData, to_file: bool) !void {

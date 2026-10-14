@@ -15,6 +15,8 @@ pub fn build(b: *std.Build) void {
     exe_mod.linkSystemLibrary("gdk-3", .{});
     exe_mod.linkSystemLibrary("cairo", .{});
     exe_mod.linkSystemLibrary("pangocairo", .{});
+    exe_mod.linkSystemLibrary("gio-2.0", .{});
+    exe_mod.linkSystemLibrary("libpipewire-0.3", .{});
     exe_mod.link_libc = true;
 
     // Add common GTK include paths for cimport
@@ -28,6 +30,9 @@ pub fn build(b: *std.Build) void {
     exe_mod.addIncludePath(.{ .cwd_relative = "/usr/include/libpng16" });
     exe_mod.addIncludePath(.{ .cwd_relative = "/usr/include/gdk-pixbuf-2.0" });
     exe_mod.addIncludePath(.{ .cwd_relative = "/usr/include/atk-1.0" });
+    exe_mod.addIncludePath(.{ .cwd_relative = "/usr/include/gio-unix-2.0" });
+    exe_mod.addIncludePath(.{ .cwd_relative = "/usr/include/pipewire-0.3" });
+    exe_mod.addIncludePath(.{ .cwd_relative = "/usr/include/spa-0.2" });
 
     const exe = b.addExecutable(.{
         .name = "oneshot",

@@ -18,18 +18,19 @@ jobs:
     # Arch (rolling), recent openSUSE. Older distros: build from source.
     runs-on: ubuntu-22.04
     env:
-      ZIG_VERSION: 0.15.1
+      ZIG_VERSION: 0.15.2
       BIN_NAME: oneshot-x86_64-linux
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install system deps
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config curl ca-certificates xz-utils \
-            libgtk-3-dev libcairo2-dev libpango1.0-dev
+            libgtk-3-dev libcairo2-dev libpango1.0-dev libglib2.0-dev \
+            libpipewire-0.3-dev
 
       - name: Install Zig ${{ env.ZIG_VERSION }}
         run: |
@@ -53,7 +54,7 @@ jobs:
           echo "path=$BIN_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact (every build)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: oneshot-binary
           path: ${{ steps.stage.outputs.path }}
@@ -61,7 +62,7 @@ jobs:
 
       - name: Attach binary to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.stage.outputs.path }}
           generate_release_notes: true
