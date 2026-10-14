@@ -82,6 +82,7 @@ pub fn openScreenCast(allocator: std.mem.Allocator) Error!Session {
         return Error.BusConnectFailed;
     };
     errdefer c.g_object_unref(conn);
+    registerAppId(conn);
 
     var p = Portal{ .allocator = allocator, .conn = conn, .ctx = ctx, .iface = screencast_iface };
     try p.initSender();
@@ -182,6 +183,7 @@ pub fn screenshot(allocator: std.mem.Allocator) Error![:0]u8 {
         return Error.BusConnectFailed;
     };
     defer c.g_object_unref(conn);
+    registerAppId(conn);
 
     var p = Portal{ .allocator = allocator, .conn = conn, .ctx = ctx, .iface = "org.freedesktop.portal.Screenshot" };
     try p.initSender();
@@ -196,6 +198,37 @@ pub fn screenshot(allocator: std.mem.Allocator) Error![:0]u8 {
     const path = c.g_filename_from_uri(uri, null, null) orelse return Error.PortalCallFailed;
     defer c.g_free(path);
     return allocator.dupeZ(u8, std.mem.span(path)) catch Error.OutOfMemory;
+}
+
+var app_id_registered = false;
+
+/// Host apps get their portal app id from the launcher's systemd scope, so a
+/// hotkey launch and a terminal launch look like different apps and the
+/// ScreenCast restore token is rejected. Registering a fixed id keeps it stable.
+/// Must precede any other portal call on the connection.
+fn registerAppId(conn: *c.GDBusConnection) void {
+    if (app_id_registered) return;
+    app_id_registered = true;
+    var args = [_]*c.GVariant{ c.g_variant_new_string("oneshot").?, dict(&.{}) };
+    var err: ?*c.GError = null;
+    const ret = c.g_dbus_connection_call_sync(
+        conn,
+        bus_name,
+        object_path,
+        "org.freedesktop.host.portal.Registry",
+        "Register",
+        c.g_variant_new_tuple(@ptrCast(&args), args.len),
+        null,
+        c.G_DBUS_CALL_FLAGS_NONE,
+        1000,
+        null,
+        &err,
+    );
+    if (ret) |r| c.g_variant_unref(r);
+    if (err) |e| {
+        std.debug.print("portal app id registration skipped: {s}\n", .{std.mem.span(e.message)});
+        c.g_error_free(e);
+    }
 }
 
 const DictEntry = struct { [*:0]const u8, ?*c.GVariant };
