@@ -200,15 +200,18 @@ pub fn screenshot(allocator: std.mem.Allocator) Error![:0]u8 {
     return allocator.dupeZ(u8, std.mem.span(path)) catch Error.OutOfMemory;
 }
 
-var app_id_registered = false;
+var registered_conn: ?*c.GDBusConnection = null;
 
 /// Host apps get their portal app id from the launcher's systemd scope, so a
 /// hotkey launch and a terminal launch look like different apps and the
 /// ScreenCast restore token is rejected. Registering a fixed id keeps it stable.
-/// Must precede any other portal call on the connection.
+/// Must precede any other portal call on the connection, and applies to that
+/// connection only: an extra ref keeps the shared bus connection alive so
+/// later sessions reuse it instead of getting an unregistered one.
 fn registerAppId(conn: *c.GDBusConnection) void {
-    if (app_id_registered) return;
-    app_id_registered = true;
+    if (registered_conn == conn) return;
+    if (registered_conn) |old| c.g_object_unref(old);
+    registered_conn = @ptrCast(c.g_object_ref(conn));
     var args = [_]*c.GVariant{ c.g_variant_new_string("oneshot").?, dict(&.{}) };
     var err: ?*c.GError = null;
     const ret = c.g_dbus_connection_call_sync(
